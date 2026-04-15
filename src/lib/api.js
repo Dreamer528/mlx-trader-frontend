@@ -1,6 +1,6 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 
-const BACKEND_URL = "http://138.124.31.181:8765";
+const BACKEND_URL = "https://quantorix-prime.ru/mlx";
 
 export async function getHealth() {
   const r = await fetch(`${BACKEND_URL}/health`);
