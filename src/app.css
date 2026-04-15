@@ -1,0 +1,194 @@
+:root {
+  /* Surfaces — almost-black with a hint of indigo */
+  --bg: #0a0a12;
+  --bg-elev: rgba(20, 20, 30, 0.75);
+  --bg-elev-2: rgba(28, 28, 42, 0.85);
+  --bg-solid: #14141e;
+
+  /* Borders — extremely subtle */
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.1);
+
+  /* Text */
+  --text: #f5f6fa;
+  --text-dim: #8892a8;
+  --text-faint: #4a5266;
+
+  /* Accents — electric violet primary, cyan secondary */
+  --accent: #7c5cff;
+  --accent-2: #5fafff;
+  --accent-glow: rgba(124, 92, 255, 0.4);
+
+  /* Status colors */
+  --green: #22c55e;
+  --green-glow: rgba(34, 197, 94, 0.25);
+  --red: #ef4444;
+  --red-glow: rgba(239, 68, 68, 0.25);
+  --yellow: #f59e0b;
+
+  /* Effects */
+  --radius: 14px;
+  --radius-sm: 10px;
+  --radius-xs: 6px;
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.5);
+  --glass-blur: blur(20px) saturate(180%);
+
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter",
+    system-ui, sans-serif;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: "ss01", "cv11";
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse 1200px 800px at 20% -10%, rgba(124, 92, 255, 0.12), transparent 50%),
+    radial-gradient(ellipse 1000px 700px at 100% 100%, rgba(95, 175, 255, 0.08), transparent 50%),
+    var(--bg);
+  background-attachment: fixed;
+}
+
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  background: var(--bg-elev-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+button:hover:not(:disabled) {
+  background: linear-gradient(135deg, var(--accent), #6a4cef);
+  border-color: var(--accent);
+  box-shadow: 0 4px 16px var(--accent-glow);
+  transform: translateY(-0.5px);
+}
+button:active:not(:disabled) {
+  transform: translateY(0);
+}
+button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: inherit;
+  background: var(--bg-elev);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 11px 14px;
+  outline: none;
+  transition: all 0.18s ease;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+}
+input:focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.12);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+}
+
+/* Markdown rendering inside chat bubbles */
+.md p {
+  margin: 0.65em 0;
+}
+.md p:first-child {
+  margin-top: 0;
+}
+.md p:last-child {
+  margin-bottom: 0;
+}
+.md strong {
+  color: var(--text);
+  font-weight: 600;
+}
+.md ul,
+.md ol {
+  padding-left: 1.4em;
+  margin: 0.5em 0;
+}
+.md li {
+  margin: 0.25em 0;
+}
+.md hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.4em 0;
+}
+.md code {
+  background: rgba(124, 92, 255, 0.12);
+  color: #c4b5fd;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.92em;
+  font-family: "SF Mono", "JetBrains Mono", Menlo, Monaco, monospace;
+}
+.md em {
+  color: var(--text-dim);
+}
+.md h1,
+.md h2,
+.md h3 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 1em 0 0.4em;
+}
+
+/* Glass surface utility */
+.glass {
+  background: var(--bg-elev);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--border);
+}
