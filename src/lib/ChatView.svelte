@@ -138,6 +138,10 @@
   }
 
   $effect(() => {
+    // When a new chat starts, parent receives `session_id` from stream meta and
+    // updates `sessionId` mid-stream. Reloading session at that moment drops the
+    // local assistant placeholder, and incoming tokens end up in the user bubble.
+    if (streaming) return;
     loadSession(sessionId);
   });
 
