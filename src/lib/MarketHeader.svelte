@@ -9,10 +9,13 @@
 
   async function load() {
     if (!symbol) return;
+    const targetSymbol = symbol;
     loading = true;
     error = null;
     try {
-      ctx = await getContext(symbol);
+      const data = await getContext(targetSymbol);
+      if (targetSymbol !== symbol) return;
+      ctx = data;
     } catch (e) {
       error = e.message;
     } finally {
@@ -23,7 +26,7 @@
   $effect(() => {
     symbol;
     load();
-    const id = setInterval(load, 60_000); // refresh every minute
+    const id = setInterval(load, 5_000); // refresh every 5 seconds
     return () => clearInterval(id);
   });
 

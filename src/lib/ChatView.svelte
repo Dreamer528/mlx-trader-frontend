@@ -1,5 +1,5 @@
 <script>
-  import { onMount, tick } from "svelte";
+  import { tick } from "svelte";
   import { marked } from "marked";
   import { getSession, streamChat } from "./api.js";
 
@@ -14,6 +14,8 @@
   let abortController = $state(null);
   let scroller;
   let thinkTimer;
+  let localMsgSeq = 0;
+  let loadSessionSeq = 0;
 
   marked.setOptions({ breaks: true, gfm: true });
 
@@ -39,14 +41,38 @@
     thinkStart = null;
   }
 
+  function nextMessageId() {
+    localMsgSeq += 1;
+    return `m_${Date.now()}_${localMsgSeq}`;
+  }
+
+  function findActiveAssistantIndex() {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === "assistant" && m.streaming) return i;
+    }
+    return -1;
+  }
+
+  function ensureActiveAssistantIndex() {
+    let idx = findActiveAssistantIndex();
+    if (idx >= 0) return idx;
+
+    messages = [...messages, { id: nextMessageId(), role: "assistant", content: "", streaming: true }];
+    return messages.length - 1;
+  }
+
   async function loadSession(id) {
+    const seq = ++loadSessionSeq;
     if (!id) {
       messages = [];
       return;
     }
     try {
       const data = await getSession(id);
+      if (seq !== loadSessionSeq || streaming || id !== sessionId) return;
       messages = data.messages.map((m) => ({
+        id: m.id || nextMessageId(),
         role: m.role,
         content: m.content,
         timestamp: m.created_at,
@@ -71,8 +97,11 @@
     thinking = true;
     startThinkTimer();
 
-    messages = [...messages, { role: "user", content: text }];
-    messages = [...messages, { role: "assistant", content: "", streaming: true }];
+    messages = [
+      ...messages,
+      { id: nextMessageId(), role: "user", content: text },
+      { id: nextMessageId(), role: "assistant", content: "", streaming: true },
+    ];
     await scrollToBottom();
 
     abortController = new AbortController();
@@ -97,22 +126,38 @@
             thinking = false;
             stopThinkTimer();
           }
-          const last = messages[messages.length - 1];
-          last.content += chunk;
-          messages = [...messages.slice(0, -1), last];
+          const idx = ensureActiveAssistantIndex();
+          const target = messages[idx];
+          messages = [
+            ...messages.slice(0, idx),
+            { ...target, content: (target.content || "") + chunk, streaming: true },
+            ...messages.slice(idx + 1),
+          ];
           scrollToBottom();
         },
         onDone: () => {
-          const last = messages[messages.length - 1];
-          last.streaming = false;
-          messages = [...messages.slice(0, -1), last];
+          const idx = findActiveAssistantIndex();
+          if (idx < 0) return;
+          const target = messages[idx];
+          messages = [
+            ...messages.slice(0, idx),
+            { ...target, streaming: false },
+            ...messages.slice(idx + 1),
+          ];
         },
         onError: (err) => {
           console.error("stream error", err);
-          const last = messages[messages.length - 1];
-          last.content = (last.content || "") + "\n\n_⚠ Ошибка соединения с бэкендом_";
-          last.streaming = false;
-          messages = [...messages.slice(0, -1), last];
+          const idx = ensureActiveAssistantIndex();
+          const target = messages[idx];
+          messages = [
+            ...messages.slice(0, idx),
+            {
+              ...target,
+              content: (target.content || "") + "\n\n_⚠ Ошибка соединения с бэкендом_",
+              streaming: false,
+            },
+            ...messages.slice(idx + 1),
+          ];
         },
       });
     } finally {
@@ -173,7 +218,7 @@
         </div>
       </div>
     {:else}
-      {#each messages as msg, i (i)}
+      {#each messages as msg, i (msg.id ?? i)}
         <div class={`bubble ${msg.role}`}>
           {#if msg.role === "assistant"}
             {#if thinking && !msg.content}
