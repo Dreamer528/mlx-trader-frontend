@@ -9,6 +9,7 @@
   let input = $state("");
   let streaming = $state(false);
   let thinking = $state(false);
+  let thinkingLabel = $state("Анализирую рынок...");
   let thinkStart = $state(null);
   let thinkElapsed = $state(0);
   let abortController = $state(null);
@@ -30,6 +31,7 @@
   function startThinkTimer() {
     thinkStart = Date.now();
     thinkElapsed = 0;
+    thinkingLabel = "Собираю свежий контекст рынка...";
     thinkTimer = setInterval(() => {
       thinkElapsed = Date.now() - thinkStart;
     }, 500);
@@ -73,7 +75,7 @@
       if (seq !== loadSessionSeq || streaming || id !== sessionId) return;
       messages = data.messages.map((m) => ({
         id: m.id || nextMessageId(),
-        role: m.role,
+        role: String(m.role || "").trim().toLowerCase() === "assistant" ? "assistant" : "user",
         content: m.content,
         timestamp: m.created_at,
       }));
@@ -119,6 +121,27 @@
             createdSessionId = meta.session_id;
             onSessionCreated?.(meta.session_id);
           }
+          if (meta?.phase === "context_ready") {
+            thinkingLabel = "Формирую ответ...";
+          }
+        },
+        onStatus: (status) => {
+          if (!status) return;
+          if (typeof status === "string") {
+            thinkingLabel = status;
+            return;
+          }
+          if (status.message) {
+            thinkingLabel = status.message;
+            return;
+          }
+          if (status.phase === "thinking") {
+            thinkingLabel = "Анализирую сигналы...";
+            return;
+          }
+          if (status.phase === "streaming_wait") {
+            thinkingLabel = "Пишу ответ...";
+          }
         },
         onToken: (chunk) => {
           if (!firstToken) {
@@ -139,9 +162,12 @@
           const idx = findActiveAssistantIndex();
           if (idx < 0) return;
           const target = messages[idx];
+          const content =
+            (target.content || "").trim() ||
+            "Ответ не успел прийти полностью. Нажми отправить еще раз, я отвечу заново.";
           messages = [
             ...messages.slice(0, idx),
-            { ...target, streaming: false },
+            { ...target, content, streaming: false },
             ...messages.slice(idx + 1),
           ];
         },
@@ -229,7 +255,7 @@
                   <span class="dot"></span>
                 </div>
                 <span class="thinking-label">
-                  Анализирую рынок{thinkElapsed > 0 ? ` · ${formatThinkTime(thinkElapsed)}` : ""}
+                  {thinkingLabel}{thinkElapsed > 0 ? ` · ${formatThinkTime(thinkElapsed)}` : ""}
                 </span>
               </div>
             {:else}

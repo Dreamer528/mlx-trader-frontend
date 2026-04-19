@@ -40,6 +40,28 @@
     if (h < 24) return `${h}h`;
     return `${Math.floor(h / 24)}d`;
   }
+
+  function humanize(text) {
+    if (!text) return "";
+    let t = String(text)
+      .replace(/^#+\s*/gm, "")
+      .replace(/`/g, "")
+      .replace(/\*\*/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    t = t
+      .replace(/\bBOS\b/gi, "пробой структуры")
+      .replace(/\bCHoCH\b/gi, "разворот структуры")
+      .replace(/\bequal_lows\b/gi, "равные минимумы")
+      .replace(/\bequal_highs\b/gi, "равные максимумы")
+      .replace(/\bbullish_impulse\b/gi, "сильный импульс вверх")
+      .replace(/\bbearish_impulse\b/gi, "сильный импульс вниз")
+      .replace(/\bswept\b/gi, "снято");
+
+    if (t.length > 240) return `${t.slice(0, 237)}...`;
+    return t;
+  }
 </script>
 
 <aside class="alerts glass">
@@ -65,14 +87,16 @@
       </div>
     {:else}
       {#each alerts as a (a.id)}
+        {@const h = humanize(a.headline)}
+        {@const b = humanize(a.body)}
         <div class="alert" style="--bar: {severityColor(a.severity)}">
           <div class="row1">
             <span class="symbol">{a.symbol}</span>
             <span class="time">{timeAgo(a.created_at)}</span>
           </div>
-          <div class="headline">{a.headline}</div>
-          {#if a.body && a.body !== a.headline}
-            <div class="body">{a.body}</div>
+          <div class="headline">{h}</div>
+          {#if b && b !== h}
+            <div class="body">{b}</div>
           {/if}
         </div>
       {/each}

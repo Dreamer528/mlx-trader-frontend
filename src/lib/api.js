@@ -68,6 +68,7 @@ export async function setScannerEnabled(enabled) {
  * @param {number|null} params.sessionId
  * @param {(token: string) => void} params.onToken
  * @param {(meta: object) => void} params.onMeta
+ * @param {(status: object|string) => void} params.onStatus
  * @param {(sessionId: number) => void} params.onDone
  * @param {(err: Error) => void} params.onError
  * @param {AbortSignal} [params.signal]
@@ -78,6 +79,7 @@ export async function streamChat({
   sessionId,
   onToken,
   onMeta,
+  onStatus,
   onDone,
   onError,
   signal,
@@ -88,11 +90,22 @@ export async function streamChat({
     body: JSON.stringify({ symbol, message, session_id: sessionId }),
     signal,
     openWhenHidden: true,
+    async onopen(response) {
+      if (!response.ok) {
+        throw new Error(`SSE open failed: ${response.status}`);
+      }
+    },
     onmessage(ev) {
       if (ev.event === "meta") {
         try {
           onMeta?.(JSON.parse(ev.data));
         } catch {}
+      } else if (ev.event === "status") {
+        try {
+          onStatus?.(JSON.parse(ev.data));
+        } catch {
+          onStatus?.(ev.data);
+        }
       } else if (ev.event === "token") {
         onToken?.(ev.data);
       } else if (ev.event === "done") {
