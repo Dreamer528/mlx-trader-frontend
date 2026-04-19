@@ -8,10 +8,36 @@
   let messages = $state([]);
   let input = $state("");
   let streaming = $state(false);
+  let thinking = $state(false);
+  let thinkStart = $state(null);
+  let thinkElapsed = $state(0);
   let abortController = $state(null);
   let scroller;
+  let thinkTimer;
 
   marked.setOptions({ breaks: true, gfm: true });
+
+  function formatThinkTime(ms) {
+    const s = Math.floor(ms / 1000);
+    if (s < 60) return `${s}с`;
+    const m = Math.floor(s / 60);
+    const r = s % 60;
+    return `${m}м ${r}с`;
+  }
+
+  function startThinkTimer() {
+    thinkStart = Date.now();
+    thinkElapsed = 0;
+    thinkTimer = setInterval(() => {
+      thinkElapsed = Date.now() - thinkStart;
+    }, 500);
+  }
+
+  function stopThinkTimer() {
+    clearInterval(thinkTimer);
+    thinkTimer = null;
+    thinkStart = null;
+  }
 
   async function loadSession(id) {
     if (!id) {
@@ -42,6 +68,8 @@
     if (!text || streaming) return;
     input = "";
     streaming = true;
+    thinking = true;
+    startThinkTimer();
 
     messages = [...messages, { role: "user", content: text }];
     messages = [...messages, { role: "assistant", content: "", streaming: true }];
@@ -49,6 +77,7 @@
 
     abortController = new AbortController();
     let createdSessionId = sessionId;
+    let firstToken = false;
 
     try {
       await streamChat({
@@ -63,6 +92,11 @@
           }
         },
         onToken: (chunk) => {
+          if (!firstToken) {
+            firstToken = true;
+            thinking = false;
+            stopThinkTimer();
+          }
           const last = messages[messages.length - 1];
           last.content += chunk;
           messages = [...messages.slice(0, -1), last];
@@ -83,6 +117,8 @@
       });
     } finally {
       streaming = false;
+      thinking = false;
+      stopThinkTimer();
       abortController = null;
     }
   }
@@ -90,6 +126,8 @@
   function stop() {
     abortController?.abort();
     streaming = false;
+    thinking = false;
+    stopThinkTimer();
   }
 
   function onKeydown(e) {
@@ -134,9 +172,22 @@
       {#each messages as msg, i (i)}
         <div class={`bubble ${msg.role}`}>
           {#if msg.role === "assistant"}
-            <div class="md">{@html marked.parse(msg.content || (msg.streaming ? "▍" : ""))}</div>
-            {#if msg.streaming && msg.content}
-              <span class="cursor">▍</span>
+            {#if thinking && !msg.content}
+              <div class="thinking">
+                <div class="thinking-dots">
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                  <span class="dot"></span>
+                </div>
+                <span class="thinking-label">
+                  Анализирую рынок{thinkElapsed > 0 ? ` · ${formatThinkTime(thinkElapsed)}` : ""}
+                </span>
+              </div>
+            {:else}
+              <div class="md">{@html marked.parse(msg.content || "")}</div>
+              {#if msg.streaming && msg.content}
+                <span class="cursor">▍</span>
+              {/if}
             {/if}
           {:else}
             <div class="user-text">{msg.content}</div>
@@ -296,6 +347,36 @@
     color: var(--text);
     border-bottom-left-radius: 6px;
   }
+
+  .thinking {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 0;
+  }
+  .thinking-dots {
+    display: flex;
+    gap: 5px;
+  }
+  .thinking-dots .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: thinkBounce 1.4s ease-in-out infinite;
+  }
+  .thinking-dots .dot:nth-child(2) { animation-delay: 0.16s; }
+  .thinking-dots .dot:nth-child(3) { animation-delay: 0.32s; }
+  @keyframes thinkBounce {
+    0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+    40% { transform: scale(1); opacity: 1; }
+  }
+  .thinking-label {
+    font-size: 13px;
+    color: var(--text-dim);
+    font-style: italic;
+  }
+
   .cursor {
     display: inline-block;
     color: var(--accent);

@@ -1,6 +1,11 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 
-const BACKEND_URL = "https://quantorix-prime.ru/mlx";
+const configuredBackendUrl =
+  import.meta.env?.VITE_BACKEND_URL ||
+  import.meta.env?.VITE_MLX_BACKEND_URL ||
+  "https://quantorix-prime.ru/mlx";
+
+const BACKEND_URL = configuredBackendUrl.replace(/\/$/, "");
 
 export async function getHealth() {
   const r = await fetch(`${BACKEND_URL}/health`);

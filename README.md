@@ -2,7 +2,13 @@
 
 Mac App (Tauri 2 + Svelte 5) for the MLX Trader AI crypto trading system.
 
-Connects to the backend API (default: `http://138.124.31.181:8765`).
+Connects to the backend API from env:
+
+```bash
+VITE_BACKEND_URL=http://127.0.0.1:8765
+```
+
+Defaults to `https://quantorix-prime.ru/mlx` if `VITE_BACKEND_URL` is not set.
 
 ## Setup
 
