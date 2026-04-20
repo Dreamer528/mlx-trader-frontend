@@ -6,10 +6,10 @@
     elapsedSec < 3
       ? "Запускаю движок…"
       : elapsedSec < 8
-        ? "Поднимаю Python-бэкенд…"
+        ? "Подключаюсь к бэкенду…"
         : elapsedSec < 20
-          ? "Подключаюсь к Claude API…"
-          : "Прогреваю модель…"
+          ? "Проверяю сервер и туннель…"
+          : "Жду ответ от backend…"
   );
 
   let mins = $derived(Math.floor(elapsedSec / 60));
@@ -30,7 +30,7 @@
         <div class="error-title">⚠ Не могу подключиться к бэкенду</div>
         <div class="error-body">{error}</div>
         <div class="hint">
-          Проверь логи: <code>tail -f /tmp/mlx-trader-backend.log</code>
+          Проверь <code>VITE_BACKEND_URL</code>, SSH-туннель или доступность серверного API.
         </div>
       </div>
     {:else}

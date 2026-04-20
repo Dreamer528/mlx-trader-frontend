@@ -40,11 +40,11 @@
         clearInterval(elapsedTimer);
       }
     } catch (e) {
-      // Backend may still be warming up. Surface a hint after ~20s but keep polling.
+      // Backend may still be warming up or the remote tunnel may be missing.
       if (elapsedSec > 20) {
         backendError =
           e?.message ||
-          "Бэкенд ещё не поднялся. Приложение продолжает ждать автозапуск и подключение.";
+          "Бэкенд недоступен. Проверь SSH-туннель, VITE_BACKEND_URL или доступность серверного API.";
       }
     }
   }
