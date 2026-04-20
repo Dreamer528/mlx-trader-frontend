@@ -1,5 +1,5 @@
 <script>
-  let { elapsedSec, error } = $props();
+  let { elapsedSec, error, backendUrl } = $props();
 
   // Stage labels based on how long we've been waiting
   let stage = $derived(
@@ -31,6 +31,9 @@
         <div class="error-body">{error}</div>
         <div class="hint">
           Проверь <code>VITE_BACKEND_URL</code>, SSH-туннель или доступность серверного API.
+        </div>
+        <div class="backend-url">
+          Сейчас app пытается открыть <code>{backendUrl}</code>
         </div>
       </div>
     {:else}
@@ -159,7 +162,19 @@
     color: var(--text-faint);
     font-size: 11px;
   }
+  .backend-url {
+    color: var(--text-dim);
+    font-size: 11px;
+    margin-top: 10px;
+    word-break: break-word;
+  }
   .hint code {
+    background: var(--bg-elev-2);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+  }
+  .backend-url code {
     background: var(--bg-elev-2);
     padding: 2px 6px;
     border-radius: 4px;

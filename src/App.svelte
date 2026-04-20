@@ -5,9 +5,10 @@
   import ChatView from "./lib/ChatView.svelte";
   import AlertsPanel from "./lib/AlertsPanel.svelte";
   import Splash from "./lib/Splash.svelte";
-  import { getHealth, getSymbols, streamTickers } from "./lib/api.js";
+  import { BACKEND_URL, getHealth, getSymbols, streamTickers } from "./lib/api.js";
 
   const DEFAULT_SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT", "ADA/USDT"];
+  const BACKEND_ERROR_DELAY_SEC = 8;
 
   let symbols = $state(DEFAULT_SYMBOLS);
   let activeSymbol = $state("BTC/USDT");
@@ -41,10 +42,10 @@
       }
     } catch (e) {
       // Backend may still be warming up or the remote tunnel may be missing.
-      if (elapsedSec > 20) {
+      if (elapsedSec >= BACKEND_ERROR_DELAY_SEC) {
         backendError =
           e?.message ||
-          "Бэкенд недоступен. Проверь SSH-туннель, VITE_BACKEND_URL или доступность серверного API.";
+          `Бэкенд ${BACKEND_URL} недоступен. Проверь SSH-туннель, VITE_BACKEND_URL или доступность серверного API.`;
       }
     }
   }
@@ -118,7 +119,7 @@
 </script>
 
 {#if !backendReady}
-  <Splash {elapsedSec} error={backendError} />
+  <Splash {elapsedSec} error={backendError} backendUrl={BACKEND_URL} />
 {:else}
   <div class="titlebar" data-tauri-drag-region>
     <div class="titlebar-spacer" data-tauri-drag-region></div>

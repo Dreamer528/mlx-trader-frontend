@@ -5,7 +5,63 @@ const configuredBackendUrl =
   import.meta.env?.VITE_MLX_BACKEND_URL ||
   "http://127.0.0.1:8765";
 
-const BACKEND_URL = configuredBackendUrl.replace(/\/$/, "");
+export const BACKEND_URL = configuredBackendUrl.replace(/\/$/, "");
+const DEFAULT_TIMEOUT_MS = Number(import.meta.env?.VITE_BACKEND_TIMEOUT_MS || 5000);
+
+function buildTimeoutMessage(message, timeoutMs) {
+  const seconds = Math.max(1, Math.round(timeoutMs / 1000));
+  return `${message} (timeout after ${seconds}s)`;
+}
+
+function createTimedSignal(timeoutMs, upstreamSignal) {
+  const controller = new AbortController();
+  let cleanedUp = false;
+
+  const abortFromUpstream = () => controller.abort(upstreamSignal?.reason);
+  const abortFromTimeout = () =>
+    controller.abort(new DOMException(`Request timed out after ${timeoutMs}ms`, "AbortError"));
+
+  const timeoutId = setTimeout(abortFromTimeout, timeoutMs);
+
+  if (upstreamSignal) {
+    if (upstreamSignal.aborted) {
+      abortFromUpstream();
+    } else {
+      upstreamSignal.addEventListener("abort", abortFromUpstream, { once: true });
+    }
+  }
+
+  return {
+    signal: controller.signal,
+    cleanup() {
+      if (cleanedUp) return;
+      cleanedUp = true;
+      clearTimeout(timeoutId);
+      upstreamSignal?.removeEventListener?.("abort", abortFromUpstream);
+    },
+  };
+}
+
+async function fetchJson(path, { fallbackMessage, timeoutMs = DEFAULT_TIMEOUT_MS, ...init } = {}) {
+  const { signal, cleanup } = createTimedSignal(timeoutMs, init.signal);
+
+  try {
+    const response = await fetch(`${BACKEND_URL}${path}`, { ...init, signal });
+    if (!response.ok) {
+      throw new Error(await readError(response, fallbackMessage));
+    }
+
+    if (response.status === 204) return null;
+    return response.json();
+  } catch (error) {
+    if (signal.aborted && error?.name === "AbortError") {
+      throw new Error(buildTimeoutMessage(fallbackMessage || "Request failed", timeoutMs));
+    }
+    throw error;
+  } finally {
+    cleanup();
+  }
+}
 
 async function readError(response, fallbackMessage) {
   try {
@@ -23,56 +79,53 @@ async function readError(response, fallbackMessage) {
 }
 
 export async function getHealth() {
-  const r = await fetch(`${BACKEND_URL}/health`);
-  if (!r.ok) throw new Error(await readError(r, "Backend unreachable"));
-  return r.json();
+  return fetchJson("/health", { fallbackMessage: "Backend unreachable", timeoutMs: 4000 });
 }
 
 export async function getSymbols() {
-  const r = await fetch(`${BACKEND_URL}/symbols`);
-  if (!r.ok) throw new Error(await readError(r, "Failed to load symbols"));
-  return r.json();
+  return fetchJson("/symbols", { fallbackMessage: "Failed to load symbols" });
 }
 
 export async function getContext(symbol) {
   const [base, quote] = symbol.split("/");
-  const r = await fetch(`${BACKEND_URL}/context/${base}/${quote}`);
-  if (!r.ok) throw new Error(await readError(r, "Failed to load context"));
-  return r.json();
+  return fetchJson(`/context/${base}/${quote}`, {
+    fallbackMessage: "Failed to load context",
+    timeoutMs: 10000,
+  });
 }
 
 export async function listSessions() {
-  const r = await fetch(`${BACKEND_URL}/sessions`);
-  return r.json();
+  return fetchJson("/sessions", { fallbackMessage: "Failed to load sessions" });
 }
 
 export async function getSession(id) {
-  const r = await fetch(`${BACKEND_URL}/sessions/${id}`);
-  return r.json();
+  return fetchJson(`/sessions/${id}`, { fallbackMessage: "Failed to load session" });
 }
 
 export async function createSession(symbol, title = "") {
-  const r = await fetch(`${BACKEND_URL}/sessions`, {
+  return fetchJson("/sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ symbol, title }),
+    fallbackMessage: "Failed to create session",
   });
-  return r.json();
 }
 
 export async function deleteSession(id) {
-  await fetch(`${BACKEND_URL}/sessions/${id}`, { method: "DELETE" });
+  await fetchJson(`/sessions/${id}`, {
+    method: "DELETE",
+    fallbackMessage: "Failed to delete session",
+  });
 }
 
 export async function getAlerts(limit = 20) {
-  const r = await fetch(`${BACKEND_URL}/alerts?limit=${limit}`);
-  if (!r.ok) throw new Error(await readError(r, "Failed to load alerts"));
-  return r.json();
+  return fetchJson(`/alerts?limit=${limit}`, { fallbackMessage: "Failed to load alerts" });
 }
 
 export async function setScannerEnabled(enabled) {
-  await fetch(`${BACKEND_URL}/scanner/${enabled ? "start" : "stop"}`, {
+  await fetchJson(`/scanner/${enabled ? "start" : "stop"}`, {
     method: "POST",
+    fallbackMessage: "Failed to update scanner",
   });
 }
 
