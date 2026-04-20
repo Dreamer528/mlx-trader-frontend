@@ -16,8 +16,8 @@
   let secs = $derived(elapsedSec % 60);
 </script>
 
-<div class="splash">
-  <div class="card">
+<div class="splash" data-tauri-drag-region>
+  <div class="card" data-tauri-drag-region>
     <div class="logo">
       <div class="eye"></div>
       <div class="eye"></div>

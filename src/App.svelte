@@ -28,6 +28,7 @@
       const health = await getHealth();
       if (health?.ok) {
         backendReady = true;
+        backendError = null;
         try {
           const data = await getSymbols();
           if (data?.symbols?.length) {
@@ -39,10 +40,11 @@
         clearInterval(elapsedTimer);
       }
     } catch (e) {
-      // Backend not up yet — keep polling. Only surface error after ~3 minutes.
-      if (elapsedSec > 180) {
-        backendError = "Бэкенд не отвечает уже больше 3 минут.";
-        clearInterval(pollTimer);
+      // Backend may still be warming up. Surface a hint after ~20s but keep polling.
+      if (elapsedSec > 20) {
+        backendError =
+          e?.message ||
+          "Бэкенд ещё не поднялся. Приложение продолжает ждать автозапуск и подключение.";
       }
     }
   }
@@ -184,6 +186,8 @@
     border-bottom: 1px solid var(--border);
     user-select: none;
     -webkit-user-select: none;
+    app-region: drag;
+    -webkit-app-region: drag;
   }
   .titlebar-spacer {
     width: 80px; /* leave room for macOS traffic lights */
