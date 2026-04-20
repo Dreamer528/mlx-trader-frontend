@@ -8,7 +8,7 @@ Connects to the backend API from env:
 VITE_BACKEND_URL=http://127.0.0.1:8765
 ```
 
-Defaults to `https://quantorix-prime.ru/mlx` if `VITE_BACKEND_URL` is not set.
+Defaults to `http://127.0.0.1:8765` if `VITE_BACKEND_URL` is not set.
 
 ## Setup
 

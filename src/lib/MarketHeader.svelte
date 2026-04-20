@@ -1,38 +1,62 @@
 <script>
   import { getContext } from "./api.js";
 
-  let { symbol } = $props();
+  let {
+    symbol,
+    liveTicker = null,
+    tickerStreamConnected = false,
+    tickerStreamError = null,
+  } = $props();
 
   let ctx = $state(null);
   let loading = $state(false);
   let error = $state(null);
+  let refreshWarning = $state(null);
 
-  async function load() {
+  async function load({ reset = false } = {}) {
     if (!symbol) return;
     const targetSymbol = symbol;
+    if (reset) {
+      ctx = null;
+      error = null;
+      refreshWarning = null;
+    }
     loading = true;
-    error = null;
     try {
       const data = await getContext(targetSymbol);
       if (targetSymbol !== symbol) return;
       ctx = data;
+      error = null;
+      refreshWarning = null;
     } catch (e) {
-      error = e.message;
+      if (targetSymbol !== symbol) return;
+      if (ctx?.symbol === targetSymbol) {
+        refreshWarning = e?.message || "Контекст временно не обновился";
+      } else {
+        error = e?.message || "Не удалось загрузить контекст";
+      }
     } finally {
-      loading = false;
+      if (targetSymbol === symbol) loading = false;
     }
   }
 
   $effect(() => {
     symbol;
-    load();
-    const id = setInterval(load, 5_000); // refresh every 5 seconds
+    load({ reset: true });
+    const id = setInterval(() => load(), 15_000);
     return () => clearInterval(id);
   });
 
   function fmt(n, digits = 2) {
     if (n === null || n === undefined) return "—";
     return Number(n).toLocaleString("en-US", { maximumFractionDigits: digits });
+  }
+
+  function fmtPrice(n) {
+    if (n === null || n === undefined) return "—";
+    const value = Number(n);
+    const digits = value >= 1000 ? 2 : value >= 1 ? 3 : 5;
+    return value.toLocaleString("en-US", { maximumFractionDigits: digits });
   }
 
   function pillClass(label) {
@@ -44,31 +68,56 @@
 </script>
 
 <header class="market-header">
-  {#if loading && !ctx}
+  {#if loading && !ctx && !liveTicker}
     <div class="loading">Загружаю рынок…</div>
-  {:else if error}
+  {:else if error && !ctx}
     <div class="error">⚠ {error}</div>
-  {:else if ctx}
-    {@const tf15 = ctx.timeframes?.["15m"]}
-    {@const tf1h = ctx.timeframes?.["1h"]}
-    {@const tf4h = ctx.timeframes?.["4h"]}
-    {@const m = ctx.extra_market_data || {}}
+  {:else if ctx || liveTicker}
+    {@const tf15 = ctx?.timeframes?.["15m"]}
+    {@const tf1h = ctx?.timeframes?.["1h"]}
+    {@const tf4h = ctx?.timeframes?.["4h"]}
+    {@const m = ctx?.extra_market_data || {}}
+    {@const price = liveTicker?.last ?? tf15?.close ?? tf1h?.close}
+    {@const change24h = liveTicker?.change24h_pct ?? tf15?.pct_change_24h ?? 0}
 
     <div class="row primary">
       <div class="symbol-block">
-        <div class="symbol-name">{ctx.symbol}</div>
-        <div class="price">${fmt(tf15?.close ?? tf1h?.close)}</div>
+        <div class="symbol-name">{ctx?.symbol ?? symbol}</div>
+        <div class="price">${fmtPrice(price)}</div>
       </div>
       <div class="changes">
         <div class={`change ${(tf15?.pct_change_1h ?? 0) >= 0 ? "up" : "down"}`}>
           <span class="change-label">1h</span>
           {(tf15?.pct_change_1h ?? 0) >= 0 ? "+" : ""}{fmt(tf15?.pct_change_1h, 2)}%
         </div>
-        <div class={`change ${(tf15?.pct_change_24h ?? 0) >= 0 ? "up" : "down"}`}>
+        <div class={`change ${change24h >= 0 ? "up" : "down"}`}>
           <span class="change-label">24h</span>
-          {(tf15?.pct_change_24h ?? 0) >= 0 ? "+" : ""}{fmt(tf15?.pct_change_24h, 2)}%
+          {change24h >= 0 ? "+" : ""}{fmt(change24h, 2)}%
         </div>
       </div>
+    </div>
+
+    <div class="row meta">
+      {#if liveTicker?.bid != null && liveTicker?.ask != null}
+        <span class="micro-pill neutral">bid ${fmtPrice(liveTicker.bid)} / ask ${fmtPrice(liveTicker.ask)}</span>
+      {/if}
+      {#if liveTicker?.high24h != null && liveTicker?.low24h != null}
+        <span class="micro-pill neutral">
+          24h range ${fmtPrice(liveTicker.low24h)} - ${fmtPrice(liveTicker.high24h)}
+        </span>
+      {/if}
+      <span class={`micro-pill ${tickerStreamConnected ? "live" : "warn"}`}>
+        {tickerStreamConnected ? "OKX live tick" : "stream reconnecting"}
+      </span>
+      {#if refreshWarning}
+        <span class="micro-pill warn">Контекст временно не обновился</span>
+      {/if}
+      {#if !ctx}
+        <span class="micro-pill neutral">Структура догружается…</span>
+      {/if}
+      {#if tickerStreamError && !tickerStreamConnected}
+        <span class="micro-pill warn">{tickerStreamError}</span>
+      {/if}
     </div>
 
     <div class="row pills">
@@ -175,6 +224,9 @@
     display: flex;
     gap: 8px;
   }
+  .meta {
+    gap: 8px;
+  }
   .change {
     font-size: 12.5px;
     padding: 5px 11px;
@@ -238,6 +290,28 @@
     background: rgba(239, 68, 68, 0.08);
   }
   .pill.neutral {
+    color: var(--text-dim);
+  }
+  .micro-pill {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 10.5px;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    background: var(--bg-elev);
+    color: var(--text-dim);
+  }
+  .micro-pill.live {
+    color: var(--green);
+    border-color: rgba(34, 197, 94, 0.25);
+    background: rgba(34, 197, 94, 0.08);
+  }
+  .micro-pill.warn {
+    color: #fbbf24;
+    border-color: rgba(251, 191, 36, 0.25);
+    background: rgba(251, 191, 36, 0.08);
+  }
+  .micro-pill.neutral {
     color: var(--text-dim);
   }
 

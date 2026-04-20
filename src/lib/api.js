@@ -3,25 +3,41 @@ import { fetchEventSource } from "@microsoft/fetch-event-source";
 const configuredBackendUrl =
   import.meta.env?.VITE_BACKEND_URL ||
   import.meta.env?.VITE_MLX_BACKEND_URL ||
-  "https://quantorix-prime.ru/mlx";
+  "http://127.0.0.1:8765";
 
 const BACKEND_URL = configuredBackendUrl.replace(/\/$/, "");
 
+async function readError(response, fallbackMessage) {
+  try {
+    const data = await response.clone().json();
+    if (typeof data?.detail === "string" && data.detail.trim()) return data.detail;
+    if (typeof data?.message === "string" && data.message.trim()) return data.message;
+  } catch {}
+
+  try {
+    const text = await response.text();
+    if (text?.trim()) return text.trim();
+  } catch {}
+
+  return fallbackMessage;
+}
+
 export async function getHealth() {
   const r = await fetch(`${BACKEND_URL}/health`);
-  if (!r.ok) throw new Error("Backend unreachable");
+  if (!r.ok) throw new Error(await readError(r, "Backend unreachable"));
   return r.json();
 }
 
 export async function getSymbols() {
   const r = await fetch(`${BACKEND_URL}/symbols`);
+  if (!r.ok) throw new Error(await readError(r, "Failed to load symbols"));
   return r.json();
 }
 
 export async function getContext(symbol) {
   const [base, quote] = symbol.split("/");
   const r = await fetch(`${BACKEND_URL}/context/${base}/${quote}`);
-  if (!r.ok) throw new Error("Failed to load context");
+  if (!r.ok) throw new Error(await readError(r, "Failed to load context"));
   return r.json();
 }
 
@@ -50,12 +66,59 @@ export async function deleteSession(id) {
 
 export async function getAlerts(limit = 20) {
   const r = await fetch(`${BACKEND_URL}/alerts?limit=${limit}`);
+  if (!r.ok) throw new Error(await readError(r, "Failed to load alerts"));
   return r.json();
 }
 
 export async function setScannerEnabled(enabled) {
   await fetch(`${BACKEND_URL}/scanner/${enabled ? "start" : "stop"}`, {
     method: "POST",
+  });
+}
+
+export async function streamTickers({
+  symbols,
+  onSnapshot,
+  onTick,
+  onKeepalive,
+  onError,
+  signal,
+}) {
+  const qs = new URLSearchParams();
+  if (symbols?.length) qs.set("symbols", symbols.join(","));
+
+  const url = qs.size ? `${BACKEND_URL}/tickers/stream?${qs}` : `${BACKEND_URL}/tickers/stream`;
+
+  await fetchEventSource(url, {
+    method: "GET",
+    signal,
+    openWhenHidden: true,
+    async onopen(response) {
+      if (!response.ok) {
+        throw new Error(await readError(response, "Ticker stream failed"));
+      }
+    },
+    onmessage(ev) {
+      if (ev.event === "snapshot") {
+        try {
+          onSnapshot?.(JSON.parse(ev.data));
+        } catch {}
+      } else if (ev.event === "tick") {
+        try {
+          onTick?.(JSON.parse(ev.data));
+        } catch {}
+      } else if (ev.event === "keepalive") {
+        try {
+          onKeepalive?.(JSON.parse(ev.data));
+        } catch {
+          onKeepalive?.(ev.data);
+        }
+      }
+    },
+    onerror(err) {
+      onError?.(err);
+      // Do not throw here: fetchEventSource will retry automatically.
+    },
   });
 }
 

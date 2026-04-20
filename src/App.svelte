@@ -5,15 +5,20 @@
   import ChatView from "./lib/ChatView.svelte";
   import AlertsPanel from "./lib/AlertsPanel.svelte";
   import Splash from "./lib/Splash.svelte";
-  import { getHealth, getSymbols } from "./lib/api.js";
+  import { getHealth, getSymbols, streamTickers } from "./lib/api.js";
 
-  let symbols = $state(["BTC/USDT", "ETH/USDT"]);
+  const DEFAULT_SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT", "ADA/USDT"];
+
+  let symbols = $state(DEFAULT_SYMBOLS);
   let activeSymbol = $state("BTC/USDT");
   let activeSessionId = $state(null);
   let backendReady = $state(false);
   let backendError = $state(null);
   let elapsedSec = $state(0);
   let sessionsRefreshKey = $state(0);
+  let liveTickers = $state({});
+  let tickerStreamConnected = $state(false);
+  let tickerStreamError = $state(null);
 
   let pollTimer = null;
   let elapsedTimer = null;
@@ -25,7 +30,10 @@
         backendReady = true;
         try {
           const data = await getSymbols();
-          if (data?.symbols?.length) symbols = data.symbols;
+          if (data?.symbols?.length) {
+            symbols = data.symbols;
+            if (!data.symbols.includes(activeSymbol)) activeSymbol = data.symbols[0];
+          }
         } catch {}
         clearInterval(pollTimer);
         clearInterval(elapsedTimer);
@@ -50,6 +58,44 @@
     clearInterval(elapsedTimer);
   });
 
+  $effect(() => {
+    if (!backendReady || !symbols?.length) return;
+
+    const controller = new AbortController();
+    const targetSymbols = [...symbols];
+
+    tickerStreamConnected = false;
+    tickerStreamError = null;
+
+    streamTickers({
+      symbols: targetSymbols,
+      signal: controller.signal,
+      onSnapshot(data) {
+        if (controller.signal.aborted) return;
+        tickerStreamConnected = true;
+        tickerStreamError = null;
+        liveTickers = { ...(data?.tickers || {}) };
+      },
+      onTick(tick) {
+        if (controller.signal.aborted || !tick?.symbol) return;
+        tickerStreamConnected = true;
+        tickerStreamError = null;
+        liveTickers = { ...liveTickers, [tick.symbol]: tick };
+      },
+      onError(err) {
+        if (controller.signal.aborted) return;
+        tickerStreamConnected = false;
+        tickerStreamError = err?.message || "Ticker stream disconnected";
+      },
+    }).catch((err) => {
+      if (controller.signal.aborted) return;
+      tickerStreamConnected = false;
+      tickerStreamError = err?.message || "Ticker stream failed";
+    });
+
+    return () => controller.abort();
+  });
+
   function handleNewSession() {
     activeSessionId = null;
   }
@@ -59,6 +105,13 @@
   function handleSessionCreated(id) {
     activeSessionId = id;
     sessionsRefreshKey++;
+  }
+
+  function fmtPrice(n) {
+    if (n === null || n === undefined) return "—";
+    const value = Number(n);
+    const digits = value >= 1000 ? 2 : value >= 1 ? 3 : 5;
+    return value.toLocaleString("en-US", { maximumFractionDigits: digits });
   }
 </script>
 
@@ -87,17 +140,26 @@
     <main class="main">
       <div class="symbol-bar">
         {#each symbols as sym (sym)}
+          {@const ticker = liveTickers[sym]}
           <button
             class="tab"
             class:active={activeSymbol === sym}
             onclick={() => (activeSymbol = sym)}
           >
-            {sym}
+            <span class="tab-symbol">{sym}</span>
+            <span class="tab-price" class:live={tickerStreamConnected && !!ticker?.last}>
+              {ticker?.last ? `$${fmtPrice(ticker.last)}` : tickerStreamError ? "stream off" : "waiting"}
+            </span>
           </button>
         {/each}
       </div>
 
-      <MarketHeader symbol={activeSymbol} />
+      <MarketHeader
+        symbol={activeSymbol}
+        liveTicker={liveTickers[activeSymbol]}
+        tickerStreamConnected={tickerStreamConnected}
+        tickerStreamError={tickerStreamError}
+      />
 
       <ChatView
         sessionId={activeSessionId}
@@ -175,17 +237,25 @@
     gap: 6px;
     padding: 14px 24px 0;
     flex-shrink: 0;
+    overflow-x: auto;
+    scrollbar-width: thin;
   }
   .tab {
     background: transparent;
     border: 1px solid transparent;
     color: var(--text-faint);
-    padding: 8px 16px;
+    padding: 8px 14px;
     border-radius: 999px;
     font-weight: 500;
-    font-size: 12.5px;
+    font-size: 12px;
     backdrop-filter: none;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+    min-width: 110px;
+    flex: 0 0 auto;
   }
   .tab:hover {
     background: var(--bg-elev);
@@ -199,5 +269,17 @@
     color: var(--text);
     border-color: rgba(124, 92, 255, 0.35);
     box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.08);
+  }
+  .tab-symbol {
+    color: inherit;
+    letter-spacing: 0.01em;
+  }
+  .tab-price {
+    font-size: 11px;
+    color: var(--text-faint);
+    font-feature-settings: "tnum";
+  }
+  .tab-price.live {
+    color: var(--text-dim);
   }
 </style>
