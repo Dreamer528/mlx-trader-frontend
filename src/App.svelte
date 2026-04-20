@@ -116,6 +116,19 @@
     const digits = value >= 1000 ? 2 : value >= 1 ? 3 : 5;
     return value.toLocaleString("en-US", { maximumFractionDigits: digits });
   }
+
+  function isStreamUnavailable(error) {
+    const message = (error?.message || "").toLowerCase();
+    return error?.status === 404 || message.includes("live ticker stream unavailable");
+  }
+
+  function tabPriceLabel(ticker) {
+    if (ticker?.last) return `$${fmtPrice(ticker.last)}`;
+    if (tickerStreamConnected) return "waiting";
+    if (isStreamUnavailable(tickerStreamError)) return "context only";
+    if (tickerStreamError) return "reconnecting";
+    return "waiting";
+  }
 </script>
 
 {#if !backendReady}
@@ -151,7 +164,7 @@
           >
             <span class="tab-symbol">{sym}</span>
             <span class="tab-price" class:live={tickerStreamConnected && !!ticker?.last}>
-              {ticker?.last ? `$${fmtPrice(ticker.last)}` : tickerStreamError ? "stream off" : "waiting"}
+              {tabPriceLabel(ticker)}
             </span>
           </button>
         {/each}
@@ -162,6 +175,7 @@
         liveTicker={liveTickers[activeSymbol]}
         tickerStreamConnected={tickerStreamConnected}
         tickerStreamError={tickerStreamError}
+        tickerStreamUnavailable={isStreamUnavailable(tickerStreamError)}
       />
 
       <ChatView

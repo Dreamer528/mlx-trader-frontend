@@ -6,6 +6,7 @@
     liveTicker = null,
     tickerStreamConnected = false,
     tickerStreamError = null,
+    tickerStreamUnavailable = false,
   } = $props();
 
   let ctx = $state(null);
@@ -106,8 +107,12 @@
           24h range ${fmtPrice(liveTicker.low24h)} - ${fmtPrice(liveTicker.high24h)}
         </span>
       {/if}
-      <span class={`micro-pill ${tickerStreamConnected ? "live" : "warn"}`}>
-        {tickerStreamConnected ? "OKX live tick" : "stream reconnecting"}
+      <span class={`micro-pill ${tickerStreamConnected ? "live" : tickerStreamUnavailable ? "neutral" : "warn"}`}>
+        {tickerStreamConnected
+          ? "OKX live tick"
+          : tickerStreamUnavailable
+            ? "context-only mode"
+            : "stream reconnecting"}
       </span>
       {#if refreshWarning}
         <span class="micro-pill warn">Контекст временно не обновился</span>
@@ -115,8 +120,8 @@
       {#if !ctx}
         <span class="micro-pill neutral">Структура догружается…</span>
       {/if}
-      {#if tickerStreamError && !tickerStreamConnected}
-        <span class="micro-pill warn">{tickerStreamError}</span>
+      {#if tickerStreamError && !tickerStreamConnected && !tickerStreamUnavailable}
+        <span class="micro-pill warn">Live ticker временно недоступен</span>
       {/if}
     </div>
 

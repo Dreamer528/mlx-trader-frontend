@@ -64,18 +64,33 @@ async function fetchJson(path, { fallbackMessage, timeoutMs = DEFAULT_TIMEOUT_MS
 }
 
 async function readError(response, fallbackMessage) {
+  const normalizedFallback = fallbackMessage || "Request failed";
+
   try {
     const data = await response.clone().json();
-    if (typeof data?.detail === "string" && data.detail.trim()) return data.detail;
-    if (typeof data?.message === "string" && data.message.trim()) return data.message;
+    if (typeof data?.detail === "string" && data.detail.trim()) {
+      return data.detail.trim().toLowerCase() === "not found" ? normalizedFallback : data.detail;
+    }
+    if (typeof data?.message === "string" && data.message.trim()) {
+      return data.message.trim().toLowerCase() === "not found" ? normalizedFallback : data.message;
+    }
   } catch {}
 
   try {
     const text = await response.text();
-    if (text?.trim()) return text.trim();
+    if (text?.trim()) {
+      return /not found/i.test(text.trim()) ? normalizedFallback : text.trim();
+    }
   } catch {}
 
-  return fallbackMessage;
+  return normalizedFallback;
+}
+
+function httpError(status, message) {
+  const error = new Error(message);
+  error.status = status;
+  error.retryable = status >= 500;
+  return error;
 }
 
 export async function getHealth() {
@@ -148,7 +163,7 @@ export async function streamTickers({
     openWhenHidden: true,
     async onopen(response) {
       if (!response.ok) {
-        throw new Error(await readError(response, "Ticker stream failed"));
+        throw httpError(response.status, await readError(response, "Live ticker stream unavailable"));
       }
     },
     onmessage(ev) {
