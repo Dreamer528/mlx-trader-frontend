@@ -17,6 +17,7 @@
   let thinkTimer;
   let localMsgSeq = 0;
   let loadSessionSeq = 0;
+  let scrollQueued = false;
 
   marked.setOptions({ breaks: true, gfm: true });
 
@@ -79,16 +80,34 @@
         content: m.content,
         timestamp: m.created_at,
       }));
-      await scrollToBottom();
+      queueScrollToBottom();
     } catch (e) {
       console.error("loadSession failed", e);
       messages = [];
     }
   }
 
-  async function scrollToBottom() {
-    await tick();
-    if (scroller) scroller.scrollTop = scroller.scrollHeight;
+  function escapeHtml(text) {
+    return String(text)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#39;");
+  }
+
+  function renderStreamingText(text) {
+    return escapeHtml(text).replaceAll("\n", "<br>");
+  }
+
+  function queueScrollToBottom() {
+    if (scrollQueued) return;
+    scrollQueued = true;
+    requestAnimationFrame(async () => {
+      scrollQueued = false;
+      await tick();
+      if (scroller) scroller.scrollTop = scroller.scrollHeight;
+    });
   }
 
   async function send() {
@@ -104,7 +123,7 @@
       { id: nextMessageId(), role: "user", content: text },
       { id: nextMessageId(), role: "assistant", content: "", streaming: true },
     ];
-    await scrollToBottom();
+    queueScrollToBottom();
 
     abortController = new AbortController();
     let createdSessionId = sessionId;
@@ -156,7 +175,7 @@
             { ...target, content: (target.content || "") + chunk, streaming: true },
             ...messages.slice(idx + 1),
           ];
-          scrollToBottom();
+          queueScrollToBottom();
         },
         onDone: () => {
           const idx = findActiveAssistantIndex();
@@ -259,7 +278,11 @@
                 </span>
               </div>
             {:else}
-              <div class="md">{@html marked.parse(msg.content || "")}</div>
+              {#if msg.streaming && msg.content}
+                <div class="streaming-text">{@html renderStreamingText(msg.content || "")}</div>
+              {:else}
+                <div class="md">{@html marked.parse(msg.content || "")}</div>
+              {/if}
               {#if msg.streaming && msg.content}
                 <span class="cursor">▍</span>
               {/if}
@@ -421,6 +444,10 @@
     border: 1px solid var(--border);
     color: var(--text);
     border-bottom-left-radius: 6px;
+  }
+  .streaming-text {
+    white-space: pre-wrap;
+    word-break: break-word;
   }
 
   .thinking {
