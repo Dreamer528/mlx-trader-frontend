@@ -1,26 +1,14 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 
+const DEFAULT_BACKEND_URL = "https://quantorix-prime.ru/mlx";
 const configuredBackendUrl =
-  import.meta.env?.VITE_BACKEND_URL || import.meta.env?.VITE_MLX_BACKEND_URL || "";
-const DEFAULT_BACKEND_CANDIDATES = ["http://127.0.0.1:8765", "http://138.124.31.181:8765"];
-const BACKEND_CANDIDATES = Array.from(
-  new Set(
-    (configuredBackendUrl ? [configuredBackendUrl] : DEFAULT_BACKEND_CANDIDATES)
-      .map((url) => url.trim())
-      .filter(Boolean)
-      .map((url) => url.replace(/\/$/, ""))
-  )
-);
+  import.meta.env?.VITE_BACKEND_URL || import.meta.env?.VITE_MLX_BACKEND_URL || DEFAULT_BACKEND_URL;
 
-let activeBackendUrl = BACKEND_CANDIDATES[0];
+let activeBackendUrl = configuredBackendUrl.trim().replace(/\/$/, "");
 const DEFAULT_TIMEOUT_MS = Number(import.meta.env?.VITE_BACKEND_TIMEOUT_MS || 5000);
 
 export function getBackendUrl() {
   return activeBackendUrl;
-}
-
-export function getBackendCandidates() {
-  return [...BACKEND_CANDIDATES];
 }
 
 function buildTimeoutMessage(message, timeoutMs) {
@@ -130,22 +118,10 @@ function httpError(status, message) {
 }
 
 export async function getHealth() {
-  let lastError = null;
-
-  for (const baseUrl of [activeBackendUrl, ...BACKEND_CANDIDATES.filter((url) => url !== activeBackendUrl)]) {
-    try {
-      const data = await fetchJsonFromBase(baseUrl, "/health", {
-        fallbackMessage: "Backend unreachable",
-        timeoutMs: 4000,
-      });
-      activeBackendUrl = baseUrl;
-      return data;
-    } catch (error) {
-      lastError = error;
-    }
-  }
-
-  throw lastError || new Error("Backend unreachable");
+  return fetchJsonFromBase(activeBackendUrl, "/health", {
+    fallbackMessage: "Backend unreachable",
+    timeoutMs: 4000,
+  });
 }
 
 export async function getSymbols() {

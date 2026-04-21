@@ -8,10 +8,11 @@ Connects to the backend API from env:
 VITE_BACKEND_URL=http://127.0.0.1:8765
 ```
 
-If `VITE_BACKEND_URL` is not set, the app auto-probes these defaults:
+If `VITE_BACKEND_URL` is not set, the app defaults to:
 
-- `http://127.0.0.1:8765`
-- `http://138.124.31.181:8765`
+- `https://quantorix-prime.ru/mlx`
+
+Use `VITE_BACKEND_URL=http://127.0.0.1:8765` only for local development or an SSH tunnel.
 
 ## Setup
 
