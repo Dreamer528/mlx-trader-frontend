@@ -117,6 +117,26 @@ function httpError(status, message) {
   return error;
 }
 
+function normalizeChatStreamError(raw) {
+  const message = String(raw || "").trim();
+  const lowered = message.toLowerCase();
+
+  if (lowered.includes("504") || lowered.includes("gateway timeout")) {
+    return httpError(504, "ИИ-провайдер не ответил вовремя");
+  }
+  if (lowered.includes("502") || lowered.includes("bad gateway")) {
+    return httpError(502, "ИИ-провайдер сейчас недоступен");
+  }
+  if (lowered.includes("429") || lowered.includes("too many requests")) {
+    return httpError(429, "ИИ-провайдер перегружен, попробуй еще раз");
+  }
+  if (lowered.includes("timed out") || lowered.includes("timeout")) {
+    return httpError(504, "Истек таймаут ответа ИИ-провайдера");
+  }
+
+  return httpError(502, message || "Не удалось получить ответ ИИ");
+}
+
 export async function getHealth() {
   return fetchJsonFromBase(activeBackendUrl, "/health", {
     fallbackMessage: "Backend unreachable",
@@ -269,6 +289,8 @@ export async function streamChat({
         }
       } else if (ev.event === "token") {
         onToken?.(ev.data);
+      } else if (ev.event === "error") {
+        throw normalizeChatStreamError(ev.data);
       } else if (ev.event === "done") {
         try {
           const data = JSON.parse(ev.data);

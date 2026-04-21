@@ -194,11 +194,12 @@
           console.error("stream error", err);
           const idx = ensureActiveAssistantIndex();
           const target = messages[idx];
+          const message = err?.message || "ИИ не смог ответить, попробуй еще раз.";
           messages = [
             ...messages.slice(0, idx),
             {
               ...target,
-              content: (target.content || "") + "\n\n_⚠ Ошибка соединения с бэкендом_",
+              content: (target.content || "") + `\n\n_⚠ ${message}_`,
               streaming: false,
             },
             ...messages.slice(idx + 1),
