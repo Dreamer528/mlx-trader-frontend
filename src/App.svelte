@@ -5,7 +5,7 @@
   import ChatView from "./lib/ChatView.svelte";
   import AlertsPanel from "./lib/AlertsPanel.svelte";
   import Splash from "./lib/Splash.svelte";
-  import { BACKEND_URL, getHealth, getSymbols, streamTickers } from "./lib/api.js";
+  import { getBackendUrl, getHealth, getSymbols, streamTickers } from "./lib/api.js";
 
   const DEFAULT_SYMBOLS = ["BTC/USDT", "ETH/USDT", "SOL/USDT", "BNB/USDT", "XRP/USDT", "ADA/USDT"];
   const BACKEND_ERROR_DELAY_SEC = 8;
@@ -15,6 +15,7 @@
   let activeSessionId = $state(null);
   let backendReady = $state(false);
   let backendError = $state(null);
+  let backendUrl = $state(getBackendUrl());
   let elapsedSec = $state(0);
   let sessionsRefreshKey = $state(0);
   let liveTickers = $state({});
@@ -27,6 +28,7 @@
   async function pollBackend() {
     try {
       const health = await getHealth();
+      backendUrl = getBackendUrl();
       if (health?.ok) {
         backendReady = true;
         backendError = null;
@@ -41,11 +43,12 @@
         clearInterval(elapsedTimer);
       }
     } catch (e) {
+      backendUrl = getBackendUrl();
       // Backend may still be warming up or the remote tunnel may be missing.
       if (elapsedSec >= BACKEND_ERROR_DELAY_SEC) {
         backendError =
           e?.message ||
-          `Бэкенд ${BACKEND_URL} недоступен. Проверь SSH-туннель, VITE_BACKEND_URL или доступность серверного API.`;
+          `Бэкенд ${backendUrl} недоступен. Проверь VITE_BACKEND_URL или доступность серверного API.`;
       }
     }
   }
@@ -132,7 +135,7 @@
 </script>
 
 {#if !backendReady}
-  <Splash {elapsedSec} error={backendError} backendUrl={BACKEND_URL} />
+  <Splash {elapsedSec} error={backendError} {backendUrl} />
 {:else}
   <div class="titlebar" data-tauri-drag-region>
     <div class="titlebar-spacer" data-tauri-drag-region></div>

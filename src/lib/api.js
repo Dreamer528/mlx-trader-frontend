@@ -1,12 +1,27 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 
 const configuredBackendUrl =
-  import.meta.env?.VITE_BACKEND_URL ||
-  import.meta.env?.VITE_MLX_BACKEND_URL ||
-  "http://127.0.0.1:8765";
+  import.meta.env?.VITE_BACKEND_URL || import.meta.env?.VITE_MLX_BACKEND_URL || "";
+const DEFAULT_BACKEND_CANDIDATES = ["http://127.0.0.1:8765", "http://138.124.31.181:8765"];
+const BACKEND_CANDIDATES = Array.from(
+  new Set(
+    (configuredBackendUrl ? [configuredBackendUrl] : DEFAULT_BACKEND_CANDIDATES)
+      .map((url) => url.trim())
+      .filter(Boolean)
+      .map((url) => url.replace(/\/$/, ""))
+  )
+);
 
-export const BACKEND_URL = configuredBackendUrl.replace(/\/$/, "");
+let activeBackendUrl = BACKEND_CANDIDATES[0];
 const DEFAULT_TIMEOUT_MS = Number(import.meta.env?.VITE_BACKEND_TIMEOUT_MS || 5000);
+
+export function getBackendUrl() {
+  return activeBackendUrl;
+}
+
+export function getBackendCandidates() {
+  return [...BACKEND_CANDIDATES];
+}
 
 function buildTimeoutMessage(message, timeoutMs) {
   const seconds = Math.max(1, Math.round(timeoutMs / 1000));
@@ -42,11 +57,31 @@ function createTimedSignal(timeoutMs, upstreamSignal) {
   };
 }
 
-async function fetchJson(path, { fallbackMessage, timeoutMs = DEFAULT_TIMEOUT_MS, ...init } = {}) {
+function normalizeNetworkError(error, fallbackMessage, timeoutMs) {
+  if (error?.name === "AbortError") {
+    return new Error(buildTimeoutMessage(fallbackMessage || "Request failed", timeoutMs));
+  }
+
+  const rawMessage = String(error?.message || "").trim();
+  if (
+    error instanceof TypeError ||
+    /load failed|failed to fetch|networkerror|fetch failed|could not connect/i.test(rawMessage)
+  ) {
+    return new Error(fallbackMessage || "Request failed");
+  }
+
+  return error;
+}
+
+async function fetchJsonFromBase(
+  baseUrl,
+  path,
+  { fallbackMessage, timeoutMs = DEFAULT_TIMEOUT_MS, ...init } = {}
+) {
   const { signal, cleanup } = createTimedSignal(timeoutMs, init.signal);
 
   try {
-    const response = await fetch(`${BACKEND_URL}${path}`, { ...init, signal });
+    const response = await fetch(`${baseUrl}${path}`, { ...init, signal });
     if (!response.ok) {
       throw new Error(await readError(response, fallbackMessage));
     }
@@ -54,13 +89,14 @@ async function fetchJson(path, { fallbackMessage, timeoutMs = DEFAULT_TIMEOUT_MS
     if (response.status === 204) return null;
     return response.json();
   } catch (error) {
-    if (signal.aborted && error?.name === "AbortError") {
-      throw new Error(buildTimeoutMessage(fallbackMessage || "Request failed", timeoutMs));
-    }
-    throw error;
+    throw normalizeNetworkError(error, fallbackMessage, timeoutMs);
   } finally {
     cleanup();
   }
+}
+
+async function fetchJson(path, options = {}) {
+  return fetchJsonFromBase(activeBackendUrl, path, options);
 }
 
 async function readError(response, fallbackMessage) {
@@ -94,7 +130,22 @@ function httpError(status, message) {
 }
 
 export async function getHealth() {
-  return fetchJson("/health", { fallbackMessage: "Backend unreachable", timeoutMs: 4000 });
+  let lastError = null;
+
+  for (const baseUrl of [activeBackendUrl, ...BACKEND_CANDIDATES.filter((url) => url !== activeBackendUrl)]) {
+    try {
+      const data = await fetchJsonFromBase(baseUrl, "/health", {
+        fallbackMessage: "Backend unreachable",
+        timeoutMs: 4000,
+      });
+      activeBackendUrl = baseUrl;
+      return data;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error("Backend unreachable");
 }
 
 export async function getSymbols() {
@@ -155,7 +206,8 @@ export async function streamTickers({
   const qs = new URLSearchParams();
   if (symbols?.length) qs.set("symbols", symbols.join(","));
 
-  const url = qs.size ? `${BACKEND_URL}/tickers/stream?${qs}` : `${BACKEND_URL}/tickers/stream`;
+  const baseUrl = getBackendUrl();
+  const url = qs.size ? `${baseUrl}/tickers/stream?${qs}` : `${baseUrl}/tickers/stream`;
 
   await fetchEventSource(url, {
     method: "GET",
@@ -215,7 +267,9 @@ export async function streamChat({
   onError,
   signal,
 }) {
-  await fetchEventSource(`${BACKEND_URL}/chat/stream`, {
+  const baseUrl = getBackendUrl();
+
+  await fetchEventSource(`${baseUrl}/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ symbol, message, session_id: sessionId }),

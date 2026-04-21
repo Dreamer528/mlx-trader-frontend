@@ -30,7 +30,7 @@
         <div class="error-title">⚠ Не могу подключиться к бэкенду</div>
         <div class="error-body">{error}</div>
         <div class="hint">
-          Проверь <code>VITE_BACKEND_URL</code>, SSH-туннель или доступность серверного API.
+          Проверь <code>VITE_BACKEND_URL</code> или доступность серверного API.
         </div>
         <div class="backend-url">
           Сейчас app пытается открыть <code>{backendUrl}</code>

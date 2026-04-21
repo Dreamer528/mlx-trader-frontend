@@ -8,7 +8,10 @@ Connects to the backend API from env:
 VITE_BACKEND_URL=http://127.0.0.1:8765
 ```
 
-Defaults to `http://127.0.0.1:8765` if `VITE_BACKEND_URL` is not set.
+If `VITE_BACKEND_URL` is not set, the app auto-probes these defaults:
+
+- `http://127.0.0.1:8765`
+- `http://138.124.31.181:8765`
 
 ## Setup
 
