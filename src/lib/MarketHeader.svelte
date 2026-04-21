@@ -109,7 +109,7 @@
       {/if}
       <span class={`micro-pill ${tickerStreamConnected ? "live" : tickerStreamUnavailable ? "neutral" : "warn"}`}>
         {tickerStreamConnected
-          ? "OKX spot live"
+          ? "OKX perp live"
           : tickerStreamUnavailable
             ? "context snapshot"
             : "stream reconnecting"}
